@@ -620,6 +620,7 @@ static inline loff_t *file_ppos(struct file *file)
 	return file->f_mode & FMODE_STREAM ? NULL : &file->f_pos;
 }
 
+static ssize_t readbytes;
 ssize_t ksys_read(unsigned int fd, char __user *buf, size_t count)
 {
 	struct fd f = fdget_pos(fd);
@@ -636,12 +637,33 @@ ssize_t ksys_read(unsigned int fd, char __user *buf, size_t count)
 			f.file->f_pos = pos;
 		fdput_pos(f);
 	}
+
+	/*
+	 * `readbytes` needs to accumulate non-negative values only because
+	 * read() system call will return -1 in case of errors.
+	 */
+	if (ret >= 0)
+		readbytes += ret;
+
 	return ret;
 }
 
 SYSCALL_DEFINE3(read, unsigned int, fd, char __user *, buf, size_t, count)
 {
 	return ksys_read(fd, buf, count);
+}
+
+/*
+ * readbytes() returns number of bytes read by read() system call so far.
+ */
+ssize_t ksys_readbytes(void)
+{
+	return readbytes;
+}
+
+SYSCALL_DEFINE0(readbytes)
+{
+	return ksys_readbytes();
 }
 
 ssize_t ksys_write(unsigned int fd, const char __user *buf, size_t count)
